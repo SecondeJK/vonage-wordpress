@@ -1,0 +1,14 @@
+{
+    "name": "vonage/wordpress2fa",
+    "description": "A Wordpress Plugin for 2fa login using Vonage",
+    "type": "plugin",
+    "authors": [
+        {
+            "name": "James Seconde",
+            "email": "jim.seconde@googlemail.com"
+        }
+    ],
+    "require": {
+        "vonage/client": "^3.0"
+    }
+}
