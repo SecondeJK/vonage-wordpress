@@ -8,7 +8,7 @@ require __DIR__ . '/vendor/autoload.php';
   Description: Use Vonage's APIs for 2FA
   Author: James Seconde
   Version: 0.0.1
-  Author URI: http://example.org/
+  Author URI: https://developer.vonage.com/
 */
 
 $basic = new Client\Credentials\Basic('232130c9', 'mOHPMgmBQBRO8xNB');
@@ -116,9 +116,10 @@ function render_2fa_pin()
     $apiSecret = $options['api_credentials_secret'];
     $phoneNumber = $_POST['phone_number'];
     // Send the request off.
-    $url = "https://api.nexmo.com/verify/json?&api_key=$apiKey&api_secret=$apiSecret&number=$phoneNumber&workflow_id=6&brand=Vonage Wordpress 2FA";
-    $response = wp_remote_get($url);
+    $url = "https://api.nexmo.com/verify/json?&api_key=$apiKey&api_secret=$apiSecret&number=$phoneNumber&workflow_id=6&brand=Wordpress2FA";
+    $response = wp_remote_post($url);
     $responseBody = json_decode($response['body'], true);
+    var_dump($responseBody);
     $requestId = $responseBody['request_id'];
 
     echo "
@@ -139,11 +140,35 @@ function render_2fa_pin()
 
 function verification_outcome()
 {
-    echo "process complete";
+    $options = get_option('vonage_api_settings_options');
+    $apiKey = $options['api_credentials_key'];
+    $apiSecret = $options['api_credentials_secret'];
+
+    // get me the request ID and pin
+    $requestId = $_POST['request_id'];
+    $pin = $_POST['pin'];
+
+    // send the pin
+    $url = "https://api.nexmo.com/verify/check/json?&api_key=$apiKey&api_secret=$apiSecret&request_id=$requestId&code=$pin";
+    $response = wp_remote_get($url);
+    $responseBody = json_decode($response['body'], true);
+
+    if ($responseBody['status'] === "0") {
+        $_SESSION['2fa'] = '1';
+        wp_redirect( admin_url() );
+    }
+
+    // Verification failed
+    if ($responseBody['status'] === "16") {
+        wp_logout();
+        wp_redirect( wp_login_url() );
+    }
 }
 
 function login_hook()
 {
+    $_SESSION['2fa'] = '0';
+
     echo "
         <h1>2 Factor Authentication</h1>
         <p>Please enter a phone number to authenticate your login</p>
@@ -157,10 +182,10 @@ function login_hook()
     ";
 }
 
-add_action('admin_menu', 'vonage_2fa_setup_menu');
-register_activation_hook(__FILE__, 'db_install');
-register_deactivation_hook(__FILE__, 'db_uninstall');
-add_action('admin_init', 'vonage_2fa_register_settings');
-add_action('admin_post_2fa_phone', 'render_2fa_pin');
-add_action('admin_post_2fa_pin', 'verification_outcome');
-add_action('wp_login', 'login_hook');
+add_action( 'admin_menu', 'vonage_2fa_setup_menu' );
+register_activation_hook( __FILE__, 'db_install' );
+register_deactivation_hook( __FILE__, 'db_uninstall' );
+add_action( 'admin_init', 'vonage_2fa_register_settings' );
+add_action( 'admin_post_2fa_phone', 'render_2fa_pin' );
+add_action( 'admin_post_2fa_pin', 'verification_outcome' );
+add_action( 'wp_login', 'login_hook' );
