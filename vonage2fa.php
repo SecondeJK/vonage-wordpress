@@ -74,12 +74,6 @@ function vonage_2fa_register_settings() {
 
     add_settings_field( 'api_credentials_key', 'API Key', 'api_credentials_key', 'vonage_2fa_plugin', 'api_credentials' );
     add_settings_field( 'api_credentials_secret', 'API Secret', 'api_credentials_secret', 'vonage_2fa_plugin', 'api_credentials' );
-    add_settings_field( 'api_credentials_phone_number', 'Phone Number', 'api_credentials_phone_number', 'vonage_2fa_plugin', 'api_credentials' );
-}
-
-function vonage_api_settings_options_validate()
-{
-    return true;
 }
 
 function vonage_plugin_text_helper() {
@@ -87,18 +81,13 @@ function vonage_plugin_text_helper() {
 }
 
 function api_credentials_key() {
-    $options = get_option( 'vonage_api_settings_options' );
+    $options = get_option('vonage_api_settings_options');
     echo "<input id='api_credentials_key' name='vonage_api_settings_options[api_credentials_key]' type='text' value='" . esc_attr( $options['api_credentials_key'] ) . "' />";
 }
 
 function api_credentials_secret() {
-    $options = get_option( 'vonage_api_settings_options' );
+    $options = get_option('vonage_api_settings_options');
     echo "<input id='api_credentials_secret' name='vonage_api_settings_options[api_credentials_secret]' type='text' value='" . esc_attr( $options['api_credentials_secret'] ) . "' />";
-}
-
-function api_credentials_phone_number() {
-    $options = get_option( 'vonage_api_settings_options' );
-    echo "<input id='api_credentials_phone_number' name='vonage_api_settings_options[api_credentials_phone_number]' type='text' value='" . esc_attr( $options['api_credentials_phone_number'] ) . "' />";
 }
 
 function load_admin_settings()
@@ -107,6 +96,7 @@ function load_admin_settings()
     <img src='" . plugin_dir_url(__FILE__) . "assets/logo-large.png' alt='Vonage logo'>
     <h1>Built in 2FA</h1>
     <p>A text is sent out with a 2FA code to the user for each Admin panel login attempt.</p>
+    <p><strong>Warning!</strong> You will be unable to recover your account if you do not provide a valid phone number!</p>
     <div>
         <form action='options.php' method='post'>";
             settings_fields('vonage_api_settings_options');
@@ -118,7 +108,59 @@ function load_admin_settings()
     ";
 }
 
+function render_2fa_pin()
+{
+    // I need the settings
+    $options = get_option('vonage_api_settings_options');
+    $apiKey = $options['api_credentials_key'];
+    $apiSecret = $options['api_credentials_secret'];
+    $phoneNumber = $_POST['phone_number'];
+    // Send the request off.
+    $url = "https://api.nexmo.com/verify/json?&api_key=$apiKey&api_secret=$apiSecret&number=$phoneNumber&workflow_id=6&brand=Vonage Wordpress 2FA";
+    $response = wp_remote_get($url);
+    $responseBody = json_decode($response['body'], true);
+    $requestId = $responseBody['request_id'];
+
+    echo "
+        <h1>2 Factor Authentication</h1>
+        <p>Please enter your PIN:</p>
+        <form action=";
+    echo esc_url( admin_url('admin-post.php') );
+    echo " method='post'>
+            <input type='hidden' name='action' value='2fa_pin'>
+            <input type='hidden' name='request_id' value='";
+    echo $requestId;
+    echo "'>
+            <input name='pin' type='text'/>
+            <input type='submit'>
+        </form>
+    ";
+}
+
+function verification_outcome()
+{
+    echo "process complete";
+}
+
+function login_hook()
+{
+    echo "
+        <h1>2 Factor Authentication</h1>
+        <p>Please enter a phone number to authenticate your login</p>
+        <form action=";
+    echo esc_url( admin_url('admin-post.php') );
+    echo " method='post'>
+            <input type='hidden' name='action' value='2fa_phone'>
+            <input name='phone_number' type='text'/>
+            <input type='submit'>
+        </form>
+    ";
+}
+
 add_action('admin_menu', 'vonage_2fa_setup_menu');
 register_activation_hook(__FILE__, 'db_install');
 register_deactivation_hook(__FILE__, 'db_uninstall');
 add_action('admin_init', 'vonage_2fa_register_settings');
+add_action('admin_post_2fa_phone', 'render_2fa_pin');
+add_action('admin_post_2fa_pin', 'verification_outcome');
+add_action('wp_login', 'login_hook');
