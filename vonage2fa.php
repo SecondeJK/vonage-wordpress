@@ -119,7 +119,11 @@ function render_2fa_pin()
     $url = "https://api.nexmo.com/verify/json?&api_key=$apiKey&api_secret=$apiSecret&number=$phoneNumber&workflow_id=6&brand=Wordpress2FA";
     $response = wp_remote_post($url);
     $responseBody = json_decode($response['body'], true);
-    var_dump($responseBody);
+
+    // if bad number then redirect me
+    if ($responseBody['status'] === "3") {
+        wp_redirect(wp_login_url());
+    }
     $requestId = $responseBody['request_id'];
 
     echo "
@@ -154,7 +158,7 @@ function verification_outcome()
     $responseBody = json_decode($response['body'], true);
 
     if ($responseBody['status'] === "0") {
-        $_SESSION['2fa'] = '1';
+        $_SESSION['2fa_request'] = $requestId;
         wp_redirect( admin_url() );
     }
 
@@ -167,7 +171,14 @@ function verification_outcome()
 
 function login_hook()
 {
-    $_SESSION['2fa'] = '0';
+    // first check if we have a verification
+    if (isset($_SESSION['2fa_request'])) {
+        // do a verify check
+        // if it does not come back success, unset the session key and resume
+        // if it is success, redirect me to admin
+    }
+
+    // otherwise we're heading to 2fa flow
 
     echo "
         <h1>2 Factor Authentication</h1>
@@ -189,3 +200,4 @@ add_action( 'admin_init', 'vonage_2fa_register_settings' );
 add_action( 'admin_post_2fa_phone', 'render_2fa_pin' );
 add_action( 'admin_post_2fa_pin', 'verification_outcome' );
 add_action( 'wp_login', 'login_hook' );
+add_action( 'wp-head', 'page_action_1');
